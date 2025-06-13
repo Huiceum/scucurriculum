@@ -4,12 +4,13 @@ import os
 import secrets
 from datetime import datetime, timedelta, date
 from ics import Calendar, Event
-import re # 引入正則表達式模組
+import re
+import pytz
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)
-
-# --- 前端 HTML 和 CSS 完全保持不變 ---
+# 優先從環境變數讀取 SECRET_KEY，如果沒有就隨機生成一個 (方便本地測試)
+app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(16))
+# --- 前端 HTML/CSS/JS 保持不變 ---
 html = '''
 <!DOCTYPE html>
 <html lang="zh-TW">
@@ -19,7 +20,6 @@ html = '''
     <title>SCU 課表查詢系統</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -29,33 +29,20 @@ html = '''
             --text-color: #c9d1d9; --text-muted-color: #8b949e; --border-color: #30363d; --hover-glow: 0 0 20px rgba(201, 164, 93, 0.4);
             --error-bg: rgba(248, 81, 73, 0.1); --error-text: #f85149; --success-bg: rgba(63, 185, 80, 0.1); --success-text: #3fb950;
         }
-        body {
-            font-family: 'Noto Sans TC', Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color);
-            margin: 0; padding: 2rem; display: flex; flex-direction: column; align-items: center; min-height: 100vh; box-sizing: border-box;
-        }
-        .content-wrapper {
-            width: 100%; max-width: 1200px; padding: 2.5rem; background-color: var(--surface-color); border: 1px solid var(--border-color);
-            border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); transition: all 0.5s ease-out;
-        }
+        body { font-family: 'Noto Sans TC', Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 2rem; display: flex; flex-direction: column; align-items: center; min-height: 100vh; box-sizing: border-box; }
+        .content-wrapper { width: 100%; max-width: 1200px; padding: 2.5rem; background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); transition: all 0.5s ease-out; }
         h2, h3 { color: var(--secondary-accent-color); text-align: center; margin: 0 0 2rem 0; font-weight: 500; }
         .form-group { margin-bottom: 1.5rem; }
         label { display: block; margin-bottom: 0.5rem; font-weight: 400; color: var(--text-muted-color); }
-        input[type="text"], input[type="password"] {
-            width: 100%; padding: 12px 15px; background-color: var(--bg-color); border: 1px solid var(--border-color);
-            border-radius: 6px; box-sizing: border-box; color: var(--text-color); font-size: 16px; transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        }
+        input[type="text"], input[type="password"] { width: 100%; padding: 12px 15px; background-color: var(--bg-color); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; color: var(--text-color); font-size: 16px; transition: border-color 0.3s ease, box-shadow 0.3s ease; }
         input:focus { outline: none; border-color: var(--primary-accent-color); box-shadow: 0 0 8px rgba(201, 164, 93, 0.3); }
-        button, .styled-button {
-            background-color: var(--primary-accent-color); color: var(--bg-color); padding: 12px 25px; border: none; border-radius: 6px; cursor: pointer;
-            font-size: 16px; font-weight: 700; width: 100%; transition: all 0.3s ease; text-decoration: none; display: inline-block; box-sizing: border-box; text-align: center;
-        }
+        button, .styled-button { background-color: var(--primary-accent-color); color: var(--bg-color); padding: 12px 25px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 700; width: 100%; transition: all 0.3s ease; text-decoration: none; display: inline-block; box-sizing: border-box; text-align: center; }
         button:hover, .styled-button:hover { background-color: #e6bf7a; transform: translateY(-2px); box-shadow: var(--hover-glow); }
         button:disabled, .styled-button.disabled { background-color: #8b949e; cursor: not-allowed; transform: none; box-shadow: none; }
         .message { margin-top: 1.5rem; padding: 12px; border-radius: 6px; text-align: center; font-weight: 500; }
         .success { background-color: var(--success-bg); color: var(--success-text); }
         .error { background-color: var(--error-bg); color: var(--error-text); }
         .loading { color: var(--text-muted-color); }
-
         #courseContent { display: none; opacity: 0; transform: translateY(20px); transition: opacity 0.8s ease-out, transform 0.8s ease-out; }
         #courseContent.visible { display: block; opacity: 1; transform: translateY(0); }
         #mobileControls { display: none; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem; }
@@ -63,23 +50,10 @@ html = '''
         #mobileControls button { padding: 8px 12px; font-size: 14px; width: auto; flex-grow: 1; }
         #mobileControls #prevDay, #mobileControls #nextDay { flex-grow: 0; width: 50px; }
         #currentDayDisplay { color: var(--primary-accent-color); font-size: 1.2em; font-weight: 700; text-align: center; flex-grow: 2; }
-
-        /* --- CSS Grid 表格 --- */
         #courseData { margin-top: 1rem; }
-        .course-grid {
-            display: grid; grid-template-columns: 129px repeat(7, 1fr); gap: 4px;
-            min-width: 900px; box-sizing: border-box; font-size: 0.85em;
-        }
-        .grid-cell {
-            padding: 8px; border-radius: 6px; background-color: var(--surface-color);
-            display: flex; align-items: center; justify-content: center;
-            text-align: center; min-height: 60px; transition: all 0.3s ease-in-out;
-            overflow: hidden; text-overflow: ellipsis;
-        }
-        .grid-header, .grid-time-header {
-            color: var(--secondary-accent-color); font-weight: 500; background-color: var(--bg-color);
-            position: sticky; top: 0; z-index: 2;
-        }
+        .course-grid { display: grid; grid-template-columns: 129px repeat(7, 1fr); gap: 4px; min-width: 900px; box-sizing: border-box; font-size: 0.85em; }
+        .grid-cell { padding: 8px; border-radius: 6px; background-color: var(--surface-color); display: flex; align-items: center; justify-content: center; text-align: center; min-height: 60px; transition: all 0.3s ease-in-out; overflow: hidden; text-overflow: ellipsis; }
+        .grid-header, .grid-time-header { color: var(--secondary-accent-color); font-weight: 500; background-color: var(--bg-color); position: sticky; top: 0; z-index: 2; }
         .grid-time-header { left: 0; z-index: 3; }
         .grid-slot-time { color: var(--text-muted-color); font-weight: 500; background-color: var(--bg-color); position: sticky; left: 0; z-index: 1; }
         .grid-course a { color: var(--text-color); text-decoration: none; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
@@ -88,8 +62,6 @@ html = '''
         .grid-course.has-course:hover a { color: var(--bg-color); font-weight: 500; }
         .grid-course.empty { background-color: transparent; border: 1px dashed var(--border-color); }
         #courseTableTitle { grid-column: 1 / -1; text-align: center; font-size: 1.2em; letter-spacing: 1px; color: var(--text-color); padding-bottom: 1rem; background-color: var(--surface-color); border-radius: 6px; }
-
-        /* --- 可折疊空行的樣式 --- */
         .row-expandable { cursor: pointer; position: relative; }
         .row-expandable::after { content: '+'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 1.5em; color: var(--text-muted-color); transition: transform 0.3s ease; }
         .row-expandable.expanded::after { content: '−'; }
@@ -99,8 +71,6 @@ html = '''
         .grid-slot-time .content-normal { display: block; }
         .grid-slot-time.is-collapsed-merged .content-normal { display: none; }
         .grid-slot-time.is-collapsed-merged .content-collapsed { display: inline; }
-
-        /* --- 手機版響應式 --- */
         @media (max-width: 768px) {
             body { padding: 0; }
             .content-wrapper { max-width: 100%; border-radius: 0; padding: 1.5rem 1rem; border: none; box-shadow: none; }
@@ -112,12 +82,8 @@ html = '''
             .mobile-full-view .grid-course.has-course:hover { transform: none; }
             .row-expandable::after { right: 5px; }
         }
-
-        /* --- 導出按鈕樣式 --- */
         .export-buttons { display: none; flex-direction: column; gap: 1rem; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--border-color); }
         @media (min-width: 768px) { .export-buttons { flex-direction: row; } .export-buttons > * { flex: 1; } }
-
-        /* --- 打印/導出專用樣式 --- */
         .is-printing { background-color: #ffffff !important; min-width: 1200px !important; }
         .is-printing .grid-cell { background-color: #ffffff !important; color: #000000 !important; border: 1px solid #ddd !important; }
         .is-printing .grid-slot-time, .is-printing .grid-header, .is-printing .grid-time-header { background-color: #f2f2f2 !important; color: #000000 !important; }
@@ -148,13 +114,8 @@ html = '''
             </div>
         </div>
     </div>
-
     <script>
-        // JavaScript 邏輯完全保持不變
-        let currentDayIndex = 0;
-        let currentViewMode = 'today';
-        const dayNames = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
-        function setupMobileView(){const t=window.innerWidth<=768,e=document.getElementById("mobileControls");if(!document.querySelector(".course-grid"))return;e.style.display=t?"flex":"none",t?("full-mobile"!==currentViewMode&&(currentDayIndex=(new Date).getDay(),currentDayIndex=0===currentDayIndex?6:currentDayIndex-1,currentViewMode="today")):currentViewMode="full-desktop",updateTableView()}function updateTableView(){const t=window.innerWidth<=768,e=document.querySelector(".course-grid");if(!e)return;const o=e.querySelectorAll(".grid-slot-time"),n=e.querySelectorAll("[data-day-index]");e.classList.remove("mobile-full-view"),e.style.gridTemplateColumns="",o.forEach(t=>{t.classList.remove("is-collapsed-merged","row-expandable","expanded")}),e.querySelectorAll(".grid-course").forEach(t=>{t.classList.remove("cell-hidden-by-collapse")}),n.forEach(t=>t.classList.remove("day-hidden")),t&&"today"===currentViewMode?(document.getElementById("toggleViewBtn").textContent="顯示整週",e.style.gridTemplateColumns="35px 1fr",n.forEach(t=>{t.classList.toggle("day-hidden",t.dataset.dayIndex!=currentDayIndex)})):t&&"full-mobile"===currentViewMode?(document.getElementById("toggleViewBtn").textContent="僅顯示今日",e.classList.add("mobile-full-view")):document.getElementById("toggleViewBtn").textContent="僅顯示今日",o.forEach(o=>{const n=o.dataset.slotIndex;let d=!1;t&&"today"===currentViewMode?e.querySelector(`.grid-course[data-slot-index="${n}"][data-day-index="${currentDayIndex}"]`)?.dataset.isEmpty==="true"&&(d=!0):"true"===o.dataset.isWeekEmpty&&(d=!0),d&&(o.classList.add("row-expandable","is-collapsed-merged"),e.querySelectorAll(`.grid-course[data-slot-index="${n}"]`).forEach(t=>{t.classList.add("cell-hidden-by-collapse")}))});const d=document.getElementById("currentDayDisplay");d.textContent=dayNames[currentDayIndex],document.getElementById("prevDay").disabled=0===currentDayIndex&&"today"===currentViewMode,document.getElementById("nextDay").disabled=6===currentDayIndex&&"today"===currentViewMode}async function performExport(t){const e=document.querySelector(".course-grid"),o=`export${t}Btn`,n=document.getElementById(o),d=n.textContent;n.textContent="生成中...",n.disabled=!0;const s=currentViewMode;e.classList.add("is-printing"),e.classList.remove("mobile-full-view"),e.style.gridTemplateColumns="",e.querySelectorAll(".is-collapsed-merged").forEach(t=>{t.classList.remove("is-collapsed-merged","expanded");const o=t.dataset.slotIndex;e.querySelectorAll(`.grid-course[data-slot-index="${o}"]`).forEach(t=>t.classList.remove("cell-hidden-by-collapse"))}),e.querySelectorAll(".day-hidden").forEach(t=>t.classList.remove("day-hidden"));try{await new Promise(t=>setTimeout(t,100));const l=await html2canvas(e,{scale:2,useCORS:!0,backgroundColor:"#ffffff"});if("Png"===t){const i=document.createElement("a");i.download="course_schedule.png",i.href=l.toDataURL("image/png"),i.click()}else if("Pdf"===t){const{jsPDF:a}=window.jspdf,c=l.toDataURL("image/png"),r=new a({orientation:l.width>l.height?"landscape":"portrait",unit:"px",format:[l.width,l.height]});r.addImage(c,"PNG",0,0,l.width,l.height),r.save("course_schedule.pdf")}}catch(u){console.error("Export failed:",u),alert("導出失敗，請查看控制台日誌。")}finally{e.classList.remove("is-printing"),updateTableView(),n.textContent=d,n.disabled=!1}}document.addEventListener("DOMContentLoaded",()=>{document.getElementById("courseData").addEventListener("click",t=>{const e=t.target.closest(".row-expandable");if(!e)return;const o=e.dataset.slotIndex,n=document.getElementById("courseData").querySelectorAll(`.grid-course[data-slot-index="${o}"]`);e.classList.toggle("expanded"),e.classList.toggle("is-collapsed-merged"),n.forEach(t=>t.classList.toggle("cell-hidden-by-collapse"))}),document.getElementById("exportPngBtn").addEventListener("click",()=>performExport("Png")),document.getElementById("exportPdfBtn").addEventListener("click",()=>performExport("Pdf")),document.getElementById("prevDay").addEventListener("click",()=>{0<currentDayIndex&&(currentDayIndex--,updateTableView())}),document.getElementById("nextDay").addEventListener("click",()=>{6>currentDayIndex&&(currentDayIndex++,updateTableView())}),document.getElementById("toggleViewBtn").addEventListener("click",()=>{window.innerWidth<=768&&(currentViewMode="today"===currentViewMode?"full-mobile":"today",updateTableView())}),window.addEventListener("resize",setupMobileView)}),document.getElementById("loginForm").addEventListener("submit",async function(t){t.preventDefault();const e=document.getElementById("userid").value,o=document.getElementById("password").value,n=document.getElementById("loginBtn"),d=document.getElementById("message");n.disabled=!0,n.textContent="登入中...",d.innerHTML='<div class="loading">正在登入...</div>',document.getElementById("courseContent").classList.remove("visible");try{const s=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:e,password:o})}),l=await s.json();"success"===l.status?(d.innerHTML='<div class="success">登入成功！正在獲取課表...</div>',await getCourseTable(l.data)):(d.innerHTML=`<div class="error">登入失敗: ${l.message}</div>`,n.disabled=!1,n.textContent="登入並查詢課表")}catch(i){d.innerHTML=`<div class="error">發生錯誤: ${i.message}</div>`,n.disabled=!1,n.textContent="登入並查詢課表"}});async function getCourseTable(t){const e=document.getElementById("message");try{const o=await fetch("/api/course",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(t)}),n=await o.json();if("success"===n.status){document.getElementById("loginForm").style.display="none",document.getElementById("mainTitle").textContent="您的課表",e.innerHTML='<div class="success">課表獲取成功！</div>';const d=document.getElementById("courseContent");document.getElementById("courseData").innerHTML=n.content,d.classList.add("visible"),document.getElementById("exportContainer").style.display="flex",setupMobileView()}else e.innerHTML=`<div class="error">課表獲取失敗: ${n.message}</div>`}catch(s){e.innerHTML=`<div class="error">課表獲取錯誤: ${s.message}</div>`}finally{const l=document.getElementById("loginBtn");l.disabled=!1,l.textContent="重新查詢"}}
+        let currentDayIndex = 0, currentViewMode = "today"; const dayNames = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]; function setupMobileView() { const t = window.innerWidth <= 768, e = document.getElementById("mobileControls"); if (!document.querySelector(".course-grid")) return; e.style.display = t ? "flex" : "none", t ? "full-mobile" !== currentViewMode && (currentDayIndex = (new Date).getDay(), currentDayIndex = 0 === currentDayIndex ? 6 : currentDayIndex - 1, currentViewMode = "today") : currentViewMode = "full-desktop", updateTableView() } function updateTableView() { const t = window.innerWidth <= 768, e = document.querySelector(".course-grid"); if (!e) return; const o = e.querySelectorAll(".grid-slot-time"), n = e.querySelectorAll("[data-day-index]"); if (e.classList.remove("mobile-full-view"), e.style.gridTemplateColumns = "", o.forEach(t => { t.classList.remove("is-collapsed-merged", "row-expandable", "expanded") }), e.querySelectorAll(".grid-course").forEach(t => { t.classList.remove("cell-hidden-by-collapse") }), n.forEach(t => t.classList.remove("day-hidden")), t && "today" === currentViewMode) { document.getElementById("toggleViewBtn").textContent = "顯示整週", e.style.gridTemplateColumns = "35px 1fr", n.forEach(t => { t.classList.toggle("day-hidden", t.dataset.dayIndex != currentDayIndex) }) } else t && "full-mobile" === currentViewMode ? (document.getElementById("toggleViewBtn").textContent = "僅顯示今日", e.classList.add("mobile-full-view")) : document.getElementById("toggleViewBtn").textContent = "僅顯示今日"; o.forEach(o => { const n = o.dataset.slotIndex; let d = !1; t && "today" === currentViewMode ? e.querySelector(`.grid-course[data-slot-index="${n}"][data-day-index="${currentDayIndex}"]`)?.dataset.isEmpty === "true" && (d = !0) : "true" === o.dataset.isWeekEmpty && (d = !0), d && (o.classList.add("row-expandable", "is-collapsed-merged"), e.querySelectorAll(`.grid-course[data-slot-index="${n}"]`).forEach(t => { t.classList.add("cell-hidden-by-collapse") })) }); const d = document.getElementById("currentDayDisplay"); d.textContent = dayNames[currentDayIndex], document.getElementById("prevDay").disabled = 0 === currentDayIndex && "today" === currentViewMode, document.getElementById("nextDay").disabled = 6 === currentDayIndex && "today" === currentViewMode } async function performExport(t) { const e = document.querySelector(".course-grid"), o = `export${t}Btn`, n = document.getElementById(o), d = n.textContent; n.textContent = "生成中...", n.disabled = !0, e.classList.add("is-printing"), e.classList.remove("mobile-full-view"), e.style.gridTemplateColumns = "", e.querySelectorAll(".is-collapsed-merged").forEach(t => { t.classList.remove("is-collapsed-merged", "expanded"); const o = t.dataset.slotIndex; e.querySelectorAll(`.grid-course[data-slot-index="${o}"]`).forEach(t => t.classList.remove("cell-hidden-by-collapse")) }), e.querySelectorAll(".day-hidden").forEach(t => t.classList.remove("day-hidden")); try { await new Promise(t => setTimeout(t, 100)); const s = await html2canvas(e, { scale: 2, useCORS: !0, backgroundColor: "#ffffff" }); if ("Png" === t) { const l = document.createElement("a"); l.download = "course_schedule.png", l.href = s.toDataURL("image/png"), l.click() } else if ("Pdf" === t) { const { jsPDF: i } = window.jspdf, a = s.toDataURL("image/png"), c = new i({ orientation: s.width > s.height ? "landscape" : "portrait", unit: "px", format: [s.width, s.height] }); c.addImage(a, "PNG", 0, 0, s.width, s.height), c.save("course_schedule.pdf") } } catch (r) { console.error("Export failed:", r), alert("導出失敗，請查看控制台日誌。") } finally { e.classList.remove("is-printing"), updateTableView(), n.textContent = d, n.disabled = !1 } } document.addEventListener("DOMContentLoaded", () => { document.getElementById("courseData").addEventListener("click", t => { const e = t.target.closest(".row-expandable"); if (!e) return; const o = e.dataset.slotIndex, n = document.getElementById("courseData").querySelectorAll(`.grid-course[data-slot-index="${o}"]`); e.classList.toggle("expanded"), e.classList.toggle("is-collapsed-merged"), n.forEach(t => t.classList.toggle("cell-hidden-by-collapse")) }), document.getElementById("exportPngBtn").addEventListener("click", () => performExport("Png")), document.getElementById("exportPdfBtn").addEventListener("click", () => performExport("Pdf")), document.getElementById("prevDay").addEventListener("click", () => { 0 < currentDayIndex && (currentDayIndex--, updateTableView()) }), document.getElementById("nextDay").addEventListener("click", () => { 6 > currentDayIndex && (currentDayIndex++, updateTableView()) }), document.getElementById("toggleViewBtn").addEventListener("click", () => { window.innerWidth <= 768 && (currentViewMode = "today" === currentViewMode ? "full-mobile" : "today", updateTableView()) }), window.addEventListener("resize", setupMobileView) }), document.getElementById("loginForm").addEventListener("submit", async function (t) { t.preventDefault(); const e = document.getElementById("userid").value, o = document.getElementById("password").value, n = document.getElementById("loginBtn"), d = document.getElementById("message"); n.disabled = !0, n.textContent = "登入中...", d.innerHTML = '<div class="loading">正在登入...</div>', document.getElementById("courseContent").classList.remove("visible"); try { const s = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userid: e, password: o }) }), l = await s.json(); "success" === l.status ? (d.innerHTML = '<div class="success">登入成功！正在獲取課表...</div>', await getCourseTable(l.data)) : (d.innerHTML = `<div class="error">登入失敗: ${l.message}</div>`, n.disabled = !1, n.textContent = "登入並查詢課表") } catch (i) { d.innerHTML = `<div class="error">發生錯誤: ${i.message}</div>`, n.disabled = !1, n.textContent = "登入並查詢課表" } }); async function getCourseTable(t) { const e = document.getElementById("message"); try { const o = await fetch("/api/course", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(t) }), n = await o.json(); if ("success" === n.status) { document.getElementById("loginForm").style.display = "none", document.getElementById("mainTitle").textContent = "您的課表", e.innerHTML = '<div class="success">課表獲取成功！</div>'; const d = document.getElementById("courseContent"); document.getElementById("courseData").innerHTML = n.content, d.classList.add("visible"), document.getElementById("exportContainer").style.display = "flex", setupMobileView() } else e.innerHTML = `<div class="error">課表獲取失敗: ${n.message}</div>` } catch (s) { e.innerHTML = `<div class="error">課表獲取錯誤: ${s.message}</div>` } finally { const l = document.getElementById("loginBtn"); l.disabled = !1, l.textContent = "重新查詢" } }
     </script>
 </body>
 </html>
@@ -169,7 +130,6 @@ def index():
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
-    # 登入邏輯保持不變
     data = request.get_json()
     userid, password = data.get('userid'), data.get('password')
     url = f"{BASE_URL}/jsonApi.php"
@@ -188,7 +148,7 @@ def api_login():
 
 def cours_table_td_data(s):
     if s is None: return ''
-    s = s.replace(' ', '').replace('��', '').replace('<br/>', '<br>').replace('<br><br>', '<br>')
+    s = s.replace(' ', ' ').replace('��', '').replace('<br/>', '<br>').replace('<br><br>', '<br>')
     return s.strip()
 
 def process_course_data(raw_data):
@@ -231,7 +191,7 @@ def api_course():
             sub_result = message_data.get('SubRESULT', [])
             time_info = message_data.get('time', '').strip().replace(' ', '')
             year, semester = int(time_info[0:3]), int(time_info[6])
-            session['course_data'] = { 'sub_result': sub_result, 'year': year, 'semester': semester }
+            session['course_data'] = { 'sub_result': sub_result }
             temp_grid, is_row_week_empty = process_course_data(sub_result)
             course_table_title = f"{year} 學年度 第 {semester} 學期"
             course_time = ['08:10 <br> 09:00', '09:10 <br> 10:00', '10:10 <br> 11:00', '11:10 <br> 12:00', '12:10 <br> 13:00', '13:10 <br> 14:00', '14:10 <br> 15:00', '15:10 <br> 16:00', '16:10 <br> 17:00', '17:10 <br> 18:20', '18:25 <br> 19:15', '19:20 <br> 20:10', '20:20 <br> 21:10', '21:15 <br> 22:05']
@@ -247,7 +207,7 @@ def api_course():
                 slot_label = sub_result[slot_idx].get("slot", "")
                 time_period_text = course_time[slot_idx] if 0 <= slot_idx < len(course_time) else ""
                 content_normal = f'<span class="content-normal">{slot_label}<br>{time_period_text}</span>'
-                content_collapsed = f'<span class="content-collapsed">{slot_label} {time_period_text.replace("<br>", "-")}</span>'
+                content_collapsed = f'<span class="content-collapsed">{slot_label} {time_period_text.replace("<br>", " - ")}</span>'
                 grid_html += f'<div class="grid-cell grid-slot-time" data-slot-index="{slot_idx}" data-is-week-empty="{is_week_empty_attr}">{content_normal}{content_collapsed}</div>'
                 for day_idx in range(7):
                     cell_to_render = temp_grid[slot_idx][day_idx]
@@ -267,125 +227,145 @@ def api_course():
     except Exception as e:
         return jsonify({"status": "error", "message": f"處理課表數據失敗: {str(e)}"}), 500
 
-# --- 新增的 ICS 導出路由 ---
+def normalize_slot(slot_str):
+    if not slot_str: return ""
+    full_width = "０１２３４５６７８９ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ"
+    half_width = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    translate_table = str.maketrans(full_width, half_width)
+    return slot_str.upper().translate(translate_table)
 
-# **新增**：智能解析課程字串的輔助函數
-def parse_course_details(text):
-    details = {
-        'name': text,
-        'location': None,
-        'teacher': None,
-        'week_type': None # 'odd', 'even', or None
-    }
-    
-    # 1. 移除 HTML 標籤並清理
-    clean_text = re.sub(r'<br\s*/?>', ' ', text).strip()
-    
-    # 2. 提取教師 (通常是結尾的2-4個中文字)
-    teacher_match = re.search(r'([\u4e00-\u9fa5]{2,4})$', clean_text)
-    if teacher_match:
-        details['teacher'] = teacher_match.group(1).strip()
-        clean_text = clean_text[:teacher_match.start()].strip()
-        
-    # 3. 提取單雙週
-    if '雙' in clean_text:
-        details['week_type'] = 'even'
-        clean_text = clean_text.replace('雙', '').strip()
-    elif '單' in clean_text:
-        details['week_type'] = 'odd'
-        clean_text = clean_text.replace('單', '').strip()
-
-    # 4. 提取地點 (常見模式：D0309, U19, 0141)
-    location_match = re.search(r'([A-Z]?\d{3,4})$', clean_text)
-    if location_match:
-        details['location'] = location_match.group(1).strip()
-        clean_text = clean_text[:location_match.start()].strip()
-
-    # 5. 剩餘部分作為課程名稱
-    details['name'] = clean_text.strip() or "未命名課程"
-
-    return details
-
-
+# --- **修改後的 ICS 導出路由** ---
 @app.route('/api/export/ics')
 def export_ics():
     if 'course_data' not in session:
         return "錯誤：課表資訊不存在。請先查詢課表。", 400
 
     course_data = session['course_data']
-    sub_result, year, semester = course_data['sub_result'], course_data['year'], course_data['semester']
-    
+    sub_result = course_data['sub_result']
     temp_grid, _ = process_course_data(sub_result)
     
-    gregorian_year = year + 1911
-    start_date = date(gregorian_year, 2, 12) if semester == 2 else date(gregorian_year, 9, 10)
-    start_weekday = start_date.weekday()
-    end_date = start_date + timedelta(weeks=18)
+    tz = pytz.timezone('Asia/Taipei')
+    today = datetime.now(tz).date()
+    
+    # 判斷學期結束日期
+    current_month = today.month
+    if current_month >= 9 or current_month <= 1:  # 上學期 (9月-1月)
+        semester_end = date(today.year + (1 if current_month >= 9 else 0), 1, 31)
+    else:  # 下學期 (2月-7月)
+        semester_end = date(today.year, 7, 31)
+    
+    # 找到本週一作為起始點
+    start_of_this_week = today - timedelta(days=today.weekday())
 
     course_time_mapping = {
-        '1': ("08:10", "09:00"), '2': ("09:10", "10:00"), '3': ("10:10", "11:00"), '4': ("11:10", "12:00"), 'E': ("12:10", "13:00"), 
-        '5': ("13:10", "14:00"), '6': ("14:10", "15:00"), '7': ("15:10", "16:00"), '8': ("16:10", "17:00"), '9': ("17:10", "18:20"), 
-        'A': ("18:25", "19:15"), 'B': ("19:20", "20:10"), 'C': ("20:20", "21:10"), 'D': ("21:15", "22:05")
+        '1': ("08:10", "09:00"), '2': ("09:10", "10:00"), '3': ("10:10", "11:00"), '4': ("11:10", "12:00"),
+        'E': ("12:10", "13:00"), '5': ("13:10", "14:00"), '6': ("14:10", "15:00"), '7': ("15:10", "16:00"),
+        '8': ("16:10", "17:00"), '9': ("17:10", "18:20"), 'A': ("18:25", "19:15"), 'B': ("19:20", "20:10"),
+        'C': ("20:20", "21:10"), 'D': ("21:15", "22:05")
     }
+    
+    # 手動構建 ICS 內容以確保符合 RFC 5545 規範
+    def fold_line(line):
+        """按照 RFC 5545 規範進行 75 字元換行"""
+        if len(line) <= 75:
+            return line
+        
+        result = []
+        while len(line) > 75:
+            result.append(line[:75])
+            line = ' ' + line[75:]  # 續行需要空格開頭
+        if line:
+            result.append(line)
+        return '\r\n'.join(result)
+    
+    ics_lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//SCU Course Schedule//EN"
+    ]
+    
+    # 計算需要創建事件的週數範圍
+    current_week_start = start_of_this_week
+    week_count = 0
+    
+    while current_week_start <= semester_end and week_count < 25:  # 最多25週防止無限循環
+        for slot_idx, row in enumerate(temp_grid):
+            for day_idx, cell in enumerate(row):
+                if cell['span'] > 0 and cell['course_id']:
+                    slot_label = normalize_slot(sub_result[slot_idx].get("slot"))
+                    if not slot_label or slot_label not in course_time_mapping: 
+                        continue
 
-    cal = Calendar()
-    for slot_idx in range(len(temp_grid)):
-        for day_idx in range(7):
-            cell = temp_grid[slot_idx][day_idx]
-            if cell['span'] > 0 and cell['course_id']:
-                slot_label = sub_result[slot_idx].get("slot")
-                end_slot_idx = slot_idx + cell['span'] - 1
-                end_slot_label = sub_result[end_slot_idx].get("slot")
+                    start_hm = course_time_mapping[slot_label][0].split(':')
+                    
+                    end_slot_idx = slot_idx + cell['span'] - 1
+                    end_slot_label = normalize_slot(sub_result[end_slot_idx].get("slot"))
+                    if not end_slot_label or end_slot_label not in course_time_mapping: 
+                        continue
+                    end_hm = course_time_mapping[end_slot_label][1].split(':')
 
-                if slot_label not in course_time_mapping or end_slot_label not in course_time_mapping:
-                    continue
+                    course_date = current_week_start + timedelta(days=day_idx)
+                    
+                    # 檢查課程日期是否超過學期結束
+                    if course_date > semester_end:
+                        continue
+                    
+                    # 處理單雙週課程
+                    raw_text = cell['raw_text']
+                    week_number = course_date.isocalendar()[1]
+                    
+                    # 跳過不符合單雙週條件的課程
+                    if '單' in raw_text and week_number % 2 == 0:
+                        continue
+                    elif '雙' in raw_text and week_number % 2 != 0:
+                        continue
+                    
+                    begin_dt = tz.localize(datetime(
+                        course_date.year, course_date.month, course_date.day, 
+                        int(start_hm[0]), int(start_hm[1])
+                    ))
+                    end_dt = tz.localize(datetime(
+                        course_date.year, course_date.month, course_date.day, 
+                        int(end_hm[0]), int(end_hm[1])
+                    ))
+                    
+                    # 清理課程名稱，移除 HTML 標籤和實體字符
+                    summary_text = cell['course_text'].replace('<br>', ' ').replace('<br/>', ' ').strip()
+                    summary_text = summary_text.replace('&nbsp;', '').replace('&nbsp', '')
+                    summary_text = re.sub(r'\s+', ' ', summary_text).strip()
 
-                start_hm = course_time_mapping[slot_label][0].split(':')
-                end_hm = course_time_mapping[end_slot_label][1].split(':')
-
-                # **使用新的解析函數**
-                details = parse_course_details(cell['course_text'])
-
-                # 計算第一次上課的日期
-                days_to_add = day_idx - start_weekday
-                first_class_date = start_date + timedelta(days=days_to_add)
-
-                # 處理單雙週的開始日期
-                # isocalendar()[1] 返回年份中的第幾週
-                start_week_num = first_class_date.isocalendar()[1]
-                if details['week_type'] == 'even' and start_week_num % 2 != 0:
-                    first_class_date += timedelta(weeks=1) # 如果是雙週課但開始於單數週，則推遲一週
-                elif details['week_type'] == 'odd' and start_week_num % 2 == 0:
-                    first_class_date += timedelta(weeks=1) # 如果是單週課但開始於雙數週，則推遲一週
-                
-                # 如果調整後超出學期，則跳過
-                if first_class_date > end_date:
-                    continue
-
-                begin_time = first_class_date.strftime(f'%Y-%m-%d {start_hm[0]}:{start_hm[1]}:00')
-                end_time = first_class_date.strftime(f'%Y-%m-%d {end_hm[0]}:{end_hm[1]}:00')
-                
-                description_parts = []
-                if details['teacher']: description_parts.append(f"教師: {details['teacher']}")
-                if details['week_type']: description_parts.append(f"週別: {'雙週' if details['week_type'] == 'even' else '單週'}")
-
-                e = Event()
-                e.name = details['name']
-                e.begin = begin_time
-                e.end = end_time
-                e.location = details['location'] or ''
-                e.description = "\n".join(description_parts)
-                
-                # 設置重複規則
-                rrule_parts = ['FREQ=WEEKLY']
-                if details['week_type']:
-                    rrule_parts.append('INTERVAL=2') # 單雙週都是每兩週重複一次
-                rrule_parts.append(f'UNTIL={end_date.strftime("%Y%m%d")}T235959Z')
-                e.rrule = ";".join(rrule_parts)
-                
-                cal.events.add(e)
-
-    return Response(str(cal), mimetype="text/calendar", headers={"Content-disposition": "attachment; filename=course_schedule.ics"})
+                    if not summary_text: 
+                        continue
+                    
+                    # 生成唯一 UID (包含日期和課程資訊)
+                    import uuid
+                    uid = f"{course_date.strftime('%Y%m%d')}-{slot_idx}-{day_idx}-{uuid.uuid4()}"
+                    
+                    # 格式化時間為 UTC
+                    dtstart = begin_dt.astimezone(pytz.UTC).strftime('%Y%m%dT%H%M%SZ')
+                    dtend = end_dt.astimezone(pytz.UTC).strftime('%Y%m%dT%H%M%SZ')
+                    
+                    # 添加事件
+                    ics_lines.extend([
+                        "BEGIN:VEVENT",
+                        fold_line(f"DTSTART:{dtstart}"),
+                        fold_line(f"DTEND:{dtend}"),
+                        fold_line(f"SUMMARY:{summary_text}"),
+                        fold_line(f"UID:{uid}"),
+                        "END:VEVENT"
+                    ])
+        
+        # 移動到下一週
+        current_week_start += timedelta(weeks=1)
+        week_count += 1
+    
+    ics_lines.append("END:VCALENDAR")
+    ics_content = '\r\n'.join(ics_lines)
+    return Response(
+        ics_content,
+        mimetype="text/calendar",
+        headers={"Content-disposition": "attachment; filename=course_schedule.ics"}
+    )
 
 
 if __name__ == '__main__':

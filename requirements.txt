@@ -1,2 +1,5 @@
-flask
+Flask
 requests
+ics
+pytz
+gunicorn
