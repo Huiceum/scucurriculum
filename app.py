@@ -276,13 +276,49 @@ html = '''
         document.getElementById("exportPngBtn").addEventListener("click", () => performExport("Png"));
         document.getElementById("exportPdfBtn").addEventListener("click", () => performExport("Pdf"));
         
-        // --- ▼▼▼ 這就是修改後的核心部分 ▼▼▼ ---
-        document.getElementById("exportIcsBtn").addEventListener("click", function() {
-            // 使用 window.location.href 來觸發下載
-            // 這會讓瀏覽器在當前的 context 中發起請求，從而帶上 session cookie
-            window.location.href = '/api/export/ics';
+        document.getElementById("exportIcsBtn").addEventListener("click", async function() {
+            if (!courseDataCache) {
+                alert('課表數據不存在，請重新查詢課表');
+                return;
+            }
+            
+            const button = this;
+            const originalText = button.textContent;
+            
+            try {
+                button.textContent = "生成中...";
+                button.disabled = true;
+                
+                const response = await fetch('/api/export/ics', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ courseData: courseDataCache })
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    alert(`下載失敗: ${errorText}`);
+                    return;
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'course_schedule.ics';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+            } catch (error) {
+                console.error('下載錯誤:', error);
+                alert(`下載失敗: ${error.message}`);
+            } finally {
+                button.textContent = originalText;
+                button.disabled = false;
+            }
         });
-        // --- ▲▲▲ 修改結束 ▲▲▲ ---
 
         document.getElementById("prevDay").addEventListener("click", () => {
             if (currentDayIndex > 0) {
@@ -340,6 +376,10 @@ html = '''
         }
     });
 
+ // 前端 JavaScript 修改
+let courseDataCache = null; // 添加全局變量來緩存課表數據
+
+// 修改 getCourseTable 函數，緩存課表數據
 async function getCourseTable(loginData) {
     const messageDiv = document.getElementById("message");
     try {
@@ -350,8 +390,8 @@ async function getCourseTable(loginData) {
         });
         const result = await response.json();
         if (result.status === "success") {
-            // 存儲課程資料用於導出
-            courseDataForExport = result.courseData; // 需要後端返回原始課程資料
+            // 緩存課表數據
+            courseDataCache = result.courseData; // 需要後端返回原始數據
             
             document.getElementById("loginForm").style.display = "none";
             document.getElementById("mainTitle").textContent = "您的課表";
@@ -374,51 +414,6 @@ async function getCourseTable(loginData) {
     }
 }
 
-// 使用 POST 方式下載 ICS
-async function downloadIcsUsingPost() {
-    if (!courseDataForExport) {
-        alert('課表資料不存在，請重新查詢課表');
-        return;
-    }
-
-    const button = document.getElementById("exportIcsBtn");
-    const originalText = button.textContent;
-    button.textContent = "生成中...";
-    button.disabled = true;
-
-    try {
-        const response = await fetch('/api/export/ics', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ courseData: courseDataForExport })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(errorText || '下載失敗');
-        }
-
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'course_schedule.ics';
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        
-    } catch (error) {
-        console.error('下載失敗:', error);
-        alert(`下載失敗: ${error.message}`);
-    } finally {
-        button.textContent = originalText;
-        button.disabled = false;
-    }
-}
 </script>
 </body>
 </html>
@@ -476,35 +471,46 @@ def process_course_data(raw_data):
                 if is_row_week_empty[slot_idx]: is_row_week_empty[slot_idx] = False
     return temp_grid, is_row_week_empty
 
+# 修改 /api/course 路由，返回原始數據
 @app.route('/api/course', methods=['POST'])
 def api_course():
     data = request.get_json()
     session_id, user_id, session_code, user_name, user_unit = data.get('sessionID'), data.get('userId'), data.get('sessionCode'), data.get('name'), data.get('unit')
     if not all([session_id, user_id, session_code, user_name, user_unit]):
         return jsonify({"status": "error", "message": "缺少必要的登入資訊來獲取課表"}), 400
+    
     course_api_url = f"{BASE_URL}/jsonApi.php"
     course_payload = { "libName": "CourseTable", "api_loginstr": session_id, "api_loginID": user_id, "api_encodeID": session_code, "api_stuname": user_name, "api_clsname": user_unit }
     headers = { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Mozilla/5.0", "Referer": BASE_URL }
+    
     try:
         response = requests.post(course_api_url, data=course_payload, headers=headers)
         response.raise_for_status()
         course_data = response.json()
+        
         if course_data.get('status') == 'success':
             message_data = course_data.get('message', {})
             sub_result = message_data.get('SubRESULT', [])
             time_info = message_data.get('time', '').strip().replace(' ', '')
             year, semester = int(time_info[0:3]), int(time_info[6])
+            
+            # 保存到 session 作為備用
             session['course_data'] = { 'sub_result': sub_result }
+            
             temp_grid, is_row_week_empty = process_course_data(sub_result)
+            
+            # 生成 HTML（保持原有邏輯）
             course_table_title = f"{year} 學年度 第 {semester} 學期"
             course_time = ['08:10 <br> 09:00', '09:10 <br> 10:00', '10:10 <br> 11:00', '11:10 <br> 12:00', '12:10 <br> 13:00', '13:10 <br> 14:00', '14:10 <br> 15:00', '15:10 <br> 16:00', '16:10 <br> 17:00', '17:10 <br> 18:20', '18:25 <br> 19:15', '19:20 <br> 20:10', '20:20 <br> 21:10', '21:15 <br> 22:05']
             week_days = ['週一 <br> Mon', '週二 <br> TUE', '週三 <br> WED', '週四 <br> THU', '週五 <br> FRI', '週六 <br> SAT', '週日 <br> SUN']
             num_slots = len(sub_result)
+            
             grid_html = '<div class="course-grid">'
             grid_html += f'<div id="courseTableTitle">{course_table_title}</div>'
             grid_html += '<div class="grid-cell grid-time-header"></div>'
             for i, day_name in enumerate(week_days):
                 grid_html += f'<div class="grid-cell grid-header" data-day-index="{i}">{day_name}</div>'
+            
             for slot_idx in range(num_slots):
                 is_week_empty_attr = 'true' if is_row_week_empty[slot_idx] else 'false'
                 slot_label = sub_result[slot_idx].get("slot", "")
@@ -512,6 +518,7 @@ def api_course():
                 content_normal = f'<span class="content-normal">{slot_label}<br>{time_period_text}</span>'
                 content_collapsed = f'<span class="content-collapsed">{slot_label} {time_period_text.replace("<br>", " - ")}</span>'
                 grid_html += f'<div class="grid-cell grid-slot-time" data-slot-index="{slot_idx}" data-is-week-empty="{is_week_empty_attr}">{content_normal}{content_collapsed}</div>'
+                
                 for day_idx in range(7):
                     cell_to_render = temp_grid[slot_idx][day_idx]
                     if cell_to_render['span'] > 0:
@@ -522,31 +529,40 @@ def api_course():
                             link_url = f"https://mobile.sys.scu.edu.tw/performance/performance/{year}/{semester}/{course_id}"
                             grid_html += f'<div class="grid-cell grid-course has-course" data-is-empty="false" data-slot-index="{slot_idx}" data-day-index="{day_idx}" {rowspan_attr}><a href="{link_url}" target="_blank">{course_text}</a></div>'
                         else:
-                            grid_html += f'<div class="grid-cell grid-course empty" data-is-empty="true" data-slot-index="{slot_idx}" data-day-index="{day_idx}" {rowspan_attr}> </div>'
+                            grid_html += f'<div class="grid-cell grid-course empty" data-is-empty="true" data-slot-index="{slot_idx}" data-day-index="{day_idx}" {rowspan_attr}> </div>'
+            
             grid_html += '</div>'
-            return jsonify({"status": "success", "content": grid_html})
+            
+            return jsonify({
+                "status": "success", 
+                "content": grid_html,
+                "courseData": { 'sub_result': sub_result }  # 添加原始數據
+            })
         else:
             return jsonify({"status": "error", "message": course_data.get('message', '獲取課表失敗')})
     except Exception as e:
         return jsonify({"status": "error", "message": f"處理課表數據失敗: {str(e)}"}), 500
 
-def normalize_slot(slot_str):
-    if not slot_str: return ""
-    full_width = "０１２３４５６７８９ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ"
-    half_width = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    translate_table = str.maketrans(full_width, half_width)
-    return slot_str.upper().translate(translate_table)
-
-# --- **修改後的 ICS 導出路由** ---
-@app.route('/api/export/ics')
+# 修改 ICS 導出路由，支援 POST 方法接收數據
+@app.route('/api/export/ics', methods=['GET', 'POST'])
 def export_ics():
-    if 'course_data' not in session:
+    course_data = None
+    
+    if request.method == 'POST':
+        # 從 POST 請求獲取數據
+        data = request.get_json()
+        course_data = data.get('courseData') if data else None
+    else:
+        # GET 方法時從 session 獲取（保持向後兼容）
+        course_data = session.get('course_data')
+    
+    if not course_data:
         return "錯誤：課表資訊不存在。請先查詢課表。", 400
 
-    course_data = session['course_data']
     sub_result = course_data['sub_result']
     temp_grid, _ = process_course_data(sub_result)
     
+    # 其餘的 ICS 生成邏輯保持不變...
     tz = pytz.timezone('Asia/Taipei')
     today = datetime.now(tz).date()
     
@@ -669,7 +685,6 @@ def export_ics():
         mimetype="text/calendar",
         headers={"Content-disposition": "attachment; filename=course_schedule.ics"}
     )
-
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
