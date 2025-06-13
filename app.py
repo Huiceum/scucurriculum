@@ -110,13 +110,267 @@ html = '''
             <div class="export-buttons" id="exportContainer">
                 <button id="exportPngBtn">導出為 PNG</button>
                 <button id="exportPdfBtn">導出為 PDF</button>
-                <a href="/api/export/ics" class="styled-button" id="exportIcsBtn">添加到日曆 (.ics)</a>
+                <button class="styled-button" id="exportIcsBtn">添加到日曆 (.ics)</button>
             </div>
         </div>
     </div>
-    <script>
-        let currentDayIndex = 0, currentViewMode = "today"; const dayNames = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]; function setupMobileView() { const t = window.innerWidth <= 768, e = document.getElementById("mobileControls"); if (!document.querySelector(".course-grid")) return; e.style.display = t ? "flex" : "none", t ? "full-mobile" !== currentViewMode && (currentDayIndex = (new Date).getDay(), currentDayIndex = 0 === currentDayIndex ? 6 : currentDayIndex - 1, currentViewMode = "today") : currentViewMode = "full-desktop", updateTableView() } function updateTableView() { const t = window.innerWidth <= 768, e = document.querySelector(".course-grid"); if (!e) return; const o = e.querySelectorAll(".grid-slot-time"), n = e.querySelectorAll("[data-day-index]"); if (e.classList.remove("mobile-full-view"), e.style.gridTemplateColumns = "", o.forEach(t => { t.classList.remove("is-collapsed-merged", "row-expandable", "expanded") }), e.querySelectorAll(".grid-course").forEach(t => { t.classList.remove("cell-hidden-by-collapse") }), n.forEach(t => t.classList.remove("day-hidden")), t && "today" === currentViewMode) { document.getElementById("toggleViewBtn").textContent = "顯示整週", e.style.gridTemplateColumns = "35px 1fr", n.forEach(t => { t.classList.toggle("day-hidden", t.dataset.dayIndex != currentDayIndex) }) } else t && "full-mobile" === currentViewMode ? (document.getElementById("toggleViewBtn").textContent = "僅顯示今日", e.classList.add("mobile-full-view")) : document.getElementById("toggleViewBtn").textContent = "僅顯示今日"; o.forEach(o => { const n = o.dataset.slotIndex; let d = !1; t && "today" === currentViewMode ? e.querySelector(`.grid-course[data-slot-index="${n}"][data-day-index="${currentDayIndex}"]`)?.dataset.isEmpty === "true" && (d = !0) : "true" === o.dataset.isWeekEmpty && (d = !0), d && (o.classList.add("row-expandable", "is-collapsed-merged"), e.querySelectorAll(`.grid-course[data-slot-index="${n}"]`).forEach(t => { t.classList.add("cell-hidden-by-collapse") })) }); const d = document.getElementById("currentDayDisplay"); d.textContent = dayNames[currentDayIndex], document.getElementById("prevDay").disabled = 0 === currentDayIndex && "today" === currentViewMode, document.getElementById("nextDay").disabled = 6 === currentDayIndex && "today" === currentViewMode } async function performExport(t) { const e = document.querySelector(".course-grid"), o = `export${t}Btn`, n = document.getElementById(o), d = n.textContent; n.textContent = "生成中...", n.disabled = !0, e.classList.add("is-printing"), e.classList.remove("mobile-full-view"), e.style.gridTemplateColumns = "", e.querySelectorAll(".is-collapsed-merged").forEach(t => { t.classList.remove("is-collapsed-merged", "expanded"); const o = t.dataset.slotIndex; e.querySelectorAll(`.grid-course[data-slot-index="${o}"]`).forEach(t => t.classList.remove("cell-hidden-by-collapse")) }), e.querySelectorAll(".day-hidden").forEach(t => t.classList.remove("day-hidden")); try { await new Promise(t => setTimeout(t, 100)); const s = await html2canvas(e, { scale: 2, useCORS: !0, backgroundColor: "#ffffff" }); if ("Png" === t) { const l = document.createElement("a"); l.download = "course_schedule.png", l.href = s.toDataURL("image/png"), l.click() } else if ("Pdf" === t) { const { jsPDF: i } = window.jspdf, a = s.toDataURL("image/png"), c = new i({ orientation: s.width > s.height ? "landscape" : "portrait", unit: "px", format: [s.width, s.height] }); c.addImage(a, "PNG", 0, 0, s.width, s.height), c.save("course_schedule.pdf") } } catch (r) { console.error("Export failed:", r), alert("導出失敗，請查看控制台日誌。") } finally { e.classList.remove("is-printing"), updateTableView(), n.textContent = d, n.disabled = !1 } } document.addEventListener("DOMContentLoaded", () => { document.getElementById("courseData").addEventListener("click", t => { const e = t.target.closest(".row-expandable"); if (!e) return; const o = e.dataset.slotIndex, n = document.getElementById("courseData").querySelectorAll(`.grid-course[data-slot-index="${o}"]`); e.classList.toggle("expanded"), e.classList.toggle("is-collapsed-merged"), n.forEach(t => t.classList.toggle("cell-hidden-by-collapse")) }), document.getElementById("exportPngBtn").addEventListener("click", () => performExport("Png")), document.getElementById("exportPdfBtn").addEventListener("click", () => performExport("Pdf")), document.getElementById("prevDay").addEventListener("click", () => { 0 < currentDayIndex && (currentDayIndex--, updateTableView()) }), document.getElementById("nextDay").addEventListener("click", () => { 6 > currentDayIndex && (currentDayIndex++, updateTableView()) }), document.getElementById("toggleViewBtn").addEventListener("click", () => { window.innerWidth <= 768 && (currentViewMode = "today" === currentViewMode ? "full-mobile" : "today", updateTableView()) }), window.addEventListener("resize", setupMobileView) }), document.getElementById("loginForm").addEventListener("submit", async function (t) { t.preventDefault(); const e = document.getElementById("userid").value, o = document.getElementById("password").value, n = document.getElementById("loginBtn"), d = document.getElementById("message"); n.disabled = !0, n.textContent = "登入中...", d.innerHTML = '<div class="loading">正在登入...</div>', document.getElementById("courseContent").classList.remove("visible"); try { const s = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userid: e, password: o }) }), l = await s.json(); "success" === l.status ? (d.innerHTML = '<div class="success">登入成功！正在獲取課表...</div>', await getCourseTable(l.data)) : (d.innerHTML = `<div class="error">登入失敗: ${l.message}</div>`, n.disabled = !1, n.textContent = "登入並查詢課表") } catch (i) { d.innerHTML = `<div class="error">發生錯誤: ${i.message}</div>`, n.disabled = !1, n.textContent = "登入並查詢課表" } }); async function getCourseTable(t) { const e = document.getElementById("message"); try { const o = await fetch("/api/course", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(t) }), n = await o.json(); if ("success" === n.status) { document.getElementById("loginForm").style.display = "none", document.getElementById("mainTitle").textContent = "您的課表", e.innerHTML = '<div class="success">課表獲取成功！</div>'; const d = document.getElementById("courseContent"); document.getElementById("courseData").innerHTML = n.content, d.classList.add("visible"), document.getElementById("exportContainer").style.display = "flex", setupMobileView() } else e.innerHTML = `<div class="error">課表獲取失敗: ${n.message}</div>` } catch (s) { e.innerHTML = `<div class="error">課表獲取錯誤: ${s.message}</div>` } finally { const l = document.getElementById("loginBtn"); l.disabled = !1, l.textContent = "重新查詢" } }
-    </script>
+<!-- 您只需要替換掉您 HTML 檔案中 <script> 到 </script> 的部分 -->
+<script>
+    let currentDayIndex = 0;
+    let currentViewMode = "today";
+    const dayNames = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"];
+
+    function setupMobileView() {
+        const isMobile = window.innerWidth <= 768;
+        const mobileControls = document.getElementById("mobileControls");
+        if (!document.querySelector(".course-grid")) return;
+
+        mobileControls.style.display = isMobile ? "flex" : "none";
+
+        if (isMobile) {
+            if (currentViewMode !== "full-mobile") {
+                let today = new Date().getDay();
+                currentDayIndex = (today === 0) ? 6 : today - 1;
+                currentViewMode = "today";
+            }
+        } else {
+            currentViewMode = "full-desktop";
+        }
+        updateTableView();
+    }
+
+    function updateTableView() {
+        const isMobile = window.innerWidth <= 768;
+        const grid = document.querySelector(".course-grid");
+        if (!grid) return;
+
+        const timeSlots = grid.querySelectorAll(".grid-slot-time");
+        const allCells = grid.querySelectorAll("[data-day-index]");
+
+        // Reset all view-specific classes and styles
+        grid.classList.remove("mobile-full-view");
+        grid.style.gridTemplateColumns = "";
+        timeSlots.forEach(slot => {
+            slot.classList.remove("is-collapsed-merged", "row-expandable", "expanded");
+        });
+        grid.querySelectorAll(".grid-course").forEach(cell => {
+            cell.classList.remove("cell-hidden-by-collapse");
+        });
+        allCells.forEach(cell => cell.classList.remove("day-hidden"));
+
+        // Apply view-specific logic
+        if (isMobile && currentViewMode === "today") {
+            document.getElementById("toggleViewBtn").textContent = "顯示整週";
+            grid.style.gridTemplateColumns = "35px 1fr";
+            allCells.forEach(cell => {
+                cell.classList.toggle("day-hidden", cell.dataset.dayIndex != currentDayIndex);
+            });
+        } else if (isMobile && currentViewMode === "full-mobile") {
+            document.getElementById("toggleViewBtn").textContent = "僅顯示今日";
+            grid.classList.add("mobile-full-view");
+        } else { // Desktop view
+             document.getElementById("toggleViewBtn").textContent = "僅顯示今日";
+        }
+        
+        // Collapse empty rows
+        timeSlots.forEach(slot => {
+            const slotIndex = slot.dataset.slotIndex;
+            let shouldCollapse = false;
+            if (isMobile && currentViewMode === "today") {
+                // In mobile today view, collapse if THIS day is empty
+                const dayCell = grid.querySelector(`.grid-course[data-slot-index="${slotIndex}"][data-day-index="${currentDayIndex}"]`);
+                if (dayCell?.dataset.isEmpty === 'true') {
+                    shouldCollapse = true;
+                }
+            } else {
+                // In desktop or mobile full week view, collapse if the WHOLE week is empty
+                if (slot.dataset.isWeekEmpty === 'true') {
+                    shouldCollapse = true;
+                }
+            }
+
+            if (shouldCollapse) {
+                slot.classList.add("row-expandable", "is-collapsed-merged");
+                grid.querySelectorAll(`.grid-course[data-slot-index="${slotIndex}"]`).forEach(cell => {
+                    cell.classList.add("cell-hidden-by-collapse");
+                });
+            }
+        });
+
+        const currentDayDisplay = document.getElementById("currentDayDisplay");
+        currentDayDisplay.textContent = dayNames[currentDayIndex];
+        document.getElementById("prevDay").disabled = (currentDayIndex === 0 && currentViewMode === "today");
+        document.getElementById("nextDay").disabled = (currentDayIndex === 6 && currentViewMode === "today");
+    }
+
+    async function performExport(type) {
+        const grid = document.querySelector('.course-grid');
+        const btnId = `export${type}Btn`;
+        const button = document.getElementById(btnId);
+        const originalText = button.textContent;
+        button.textContent = "生成中...";
+        button.disabled = true;
+
+        // Prepare grid for printing
+        grid.classList.add('is-printing');
+        grid.classList.remove('mobile-full-view');
+        grid.style.gridTemplateColumns = '';
+        grid.querySelectorAll('.is-collapsed-merged').forEach(slot => {
+            slot.classList.remove('is-collapsed-merged', 'expanded');
+            const slotIndex = slot.dataset.slotIndex;
+            grid.querySelectorAll(`.grid-course[data-slot-index="${slotIndex}"]`).forEach(cell => {
+                cell.classList.remove('cell-hidden-by-collapse');
+            });
+        });
+        grid.querySelectorAll('.day-hidden').forEach(cell => cell.classList.remove('day-hidden'));
+
+        try {
+            await new Promise(resolve => setTimeout(resolve, 100)); // Allow DOM to update
+            const canvas = await html2canvas(grid, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            });
+
+            if (type === 'Png') {
+                const link = document.createElement('a');
+                link.download = 'course_schedule.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } else if (type === 'Pdf') {
+                const { jsPDF } = window.jspdf;
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF({
+                    orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+                    unit: 'px',
+                    format: [canvas.width, canvas.height]
+                });
+                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+                pdf.save('course_schedule.pdf');
+            }
+        } catch (error) {
+            console.error('Export failed:', error);
+            alert('導出失敗，請查看控制台日誌。');
+        } finally {
+            // Revert grid to original state
+            grid.classList.remove('is-printing');
+            updateTableView(); // Re-apply current view settings
+            button.textContent = originalText;
+            button.disabled = false;
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById("courseData").addEventListener("click", event => {
+            const expandableRow = event.target.closest(".row-expandable");
+            if (!expandableRow) return;
+
+            const slotIndex = expandableRow.dataset.slotIndex;
+            const cellsToToggle = document.getElementById("courseData").querySelectorAll(`.grid-course[data-slot-index="${slotIndex}"]`);
+            
+            expandableRow.classList.toggle("expanded");
+            expandableRow.classList.toggle("is-collapsed-merged");
+            cellsToToggle.forEach(cell => cell.classList.toggle("cell-hidden-by-collapse"));
+        });
+
+        document.getElementById("exportPngBtn").addEventListener("click", () => performExport("Png"));
+        document.getElementById("exportPdfBtn").addEventListener("click", () => performExport("Pdf"));
+        
+        // --- ▼▼▼ 這就是修改後的核心部分 ▼▼▼ ---
+        document.getElementById("exportIcsBtn").addEventListener("click", function() {
+            // 使用 window.location.href 來觸發下載
+            // 這會讓瀏覽器在當前的 context 中發起請求，從而帶上 session cookie
+            window.location.href = '/api/export/ics';
+        });
+        // --- ▲▲▲ 修改結束 ▲▲▲ ---
+
+        document.getElementById("prevDay").addEventListener("click", () => {
+            if (currentDayIndex > 0) {
+                currentDayIndex--;
+                updateTableView();
+            }
+        });
+        document.getElementById("nextDay").addEventListener("click", () => {
+            if (currentDayIndex < 6) {
+                currentDayIndex++;
+                updateTableView();
+            }
+        });
+        document.getElementById("toggleViewBtn").addEventListener("click", () => {
+            if (window.innerWidth <= 768) {
+                currentViewMode = (currentViewMode === "today") ? "full-mobile" : "today";
+                updateTableView();
+            }
+        });
+        window.addEventListener("resize", setupMobileView);
+    });
+
+    document.getElementById("loginForm").addEventListener("submit", async function(event) {
+        event.preventDefault();
+        const userid = document.getElementById("userid").value;
+        const password = document.getElementById("password").value;
+        const loginBtn = document.getElementById("loginBtn");
+        const messageDiv = document.getElementById("message");
+
+        loginBtn.disabled = true;
+        loginBtn.textContent = "登入中...";
+        messageDiv.innerHTML = '<div class="loading">正在登入...</div>';
+        document.getElementById("courseContent").classList.remove("visible");
+
+        try {
+            const response = await fetch("/api/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userid: userid, password: password }),
+            });
+            const result = await response.json();
+
+            if (result.status === "success") {
+                messageDiv.innerHTML = '<div class="success">登入成功！正在獲取課表...</div>';
+                await getCourseTable(result.data);
+            } else {
+                messageDiv.innerHTML = `<div class="error">登入失敗: ${result.message}</div>`;
+                loginBtn.disabled = false;
+                loginBtn.textContent = "登入並查詢課表";
+            }
+        } catch (error) {
+            messageDiv.innerHTML = `<div class="error">發生錯誤: ${error.message}</div>`;
+            loginBtn.disabled = false;
+            loginBtn.textContent = "登入並查詢課表";
+        }
+    });
+
+    async function getCourseTable(loginData) {
+        const messageDiv = document.getElementById("message");
+        try {
+            const response = await fetch("/api/course", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(loginData),
+            });
+            const result = await response.json();
+            if (result.status === "success") {
+                document.getElementById("loginForm").style.display = "none";
+                document.getElementById("mainTitle").textContent = "您的課表";
+                messageDiv.innerHTML = '<div class="success">課表獲取成功！</div>';
+                const courseContent = document.getElementById("courseContent");
+
+                document.getElementById("courseData").innerHTML = result.content;
+                courseContent.classList.add("visible");
+                document.getElementById("exportContainer").style.display = "flex";
+                setupMobileView();
+            } else {
+                messageDiv.innerHTML = `<div class="error">課表獲取失敗: ${result.message}</div>`;
+            }
+        } catch (error) {
+            messageDiv.innerHTML = `<div class="error">課表獲取錯誤: ${error.message}</div>`;
+        } finally {
+            const loginBtn = document.getElementById("loginBtn");
+            loginBtn.disabled = false;
+            loginBtn.textContent = "重新查詢";
+        }
+    }
+</script>
 </body>
 </html>
 '''
