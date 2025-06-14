@@ -1058,8 +1058,8 @@ def export_ics():
     current_month = today.month
     if current_month >= 9 or current_month <= 1:  # 上學期 (9月-1月)
         semester_end = date(today.year + (1 if current_month >= 9 else 0), 1, 31)
-    else:  # 下學期 (2月-7月)
-        semester_end = date(today.year, 7, 31)
+    else:  # 下學期 (2月-6月)
+        semester_end = date(today.year, 6, 20)
     
     # 找到本週一作為起始點
     start_of_this_week = today - timedelta(days=today.weekday())
