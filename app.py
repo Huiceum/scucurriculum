@@ -24,359 +24,904 @@ html = '''
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
+        /* Dark Theme (Default) */
         :root {
-            --bg-color: #0d1117; --surface-color: #161b22; --primary-accent-color: #c9a45d; --secondary-accent-color: #58a6ff;
-            --text-color: #c9d1d9; --text-muted-color: #8b949e; --border-color: #30363d; --hover-glow: 0 0 20px rgba(201, 164, 93, 0.4);
-            --error-bg: rgba(248, 81, 73, 0.1); --error-text: #f85149; --success-bg: rgba(63, 185, 80, 0.1); --success-text: #3fb950;
+            --bg-color: #000000;
+            --surface-color: #1a1a1a;
+            --primary-accent-color: #5979b1;
+            --secondary-accent-color: #6b9bbb;
+            --text-color: #ffffff;
+            --text-muted-color: #cccccc;
+            --border-color: #333333;
+            --hover-glow: 0 0 20px rgba(107, 147, 214, 0.4);
+            --error-bg: rgba(248, 81, 73, 0.1);
+            --error-text: #f85149;
+            --success-bg: rgba(63, 185, 80, 0.1);
+            --success-text: #3fb950;
+            --dot-color: rgba(107, 147, 214, 0.2);
+            --icon-filter: brightness(0) invert(1);
         }
-        body { font-family: 'Noto Sans TC', Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 2rem; display: flex; flex-direction: column; align-items: center; min-height: 100vh; box-sizing: border-box; }
-        .content-wrapper { width: 100%; max-width: 1200px; padding: 2.5rem; background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); transition: all 0.5s ease-out; }
-        h2, h3 { color: var(--secondary-accent-color); text-align: center; margin: 0 0 2rem 0; font-weight: 500; }
-        .form-group { margin-bottom: 1.5rem; }
-        label { display: block; margin-bottom: 0.5rem; font-weight: 400; color: var(--text-muted-color); }
-        input[type="text"], input[type="password"] { width: 100%; padding: 12px 15px; background-color: var(--bg-color); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; color: var(--text-color); font-size: 16px; transition: border-color 0.3s ease, box-shadow 0.3s ease; }
-        input:focus { outline: none; border-color: var(--primary-accent-color); box-shadow: 0 0 8px rgba(201, 164, 93, 0.3); }
-        button, .styled-button { background-color: var(--primary-accent-color); color: var(--bg-color); padding: 12px 25px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 700; width: 100%; transition: all 0.3s ease; text-decoration: none; display: inline-block; box-sizing: border-box; text-align: center; }
-        button:hover, .styled-button:hover { background-color: #e6bf7a; transform: translateY(-2px); box-shadow: var(--hover-glow); }
-        button:disabled, .styled-button.disabled { background-color: #8b949e; cursor: not-allowed; transform: none; box-shadow: none; }
-        .message { margin-top: 1.5rem; padding: 12px; border-radius: 6px; text-align: center; font-weight: 500; }
-        .success { background-color: var(--success-bg); color: var(--success-text); }
-        .error { background-color: var(--error-bg); color: var(--error-text); }
-        .loading { color: var(--text-muted-color); }
-        #courseContent { display: none; opacity: 0; transform: translateY(20px); transition: opacity 0.8s ease-out, transform 0.8s ease-out; }
-        #courseContent.visible { display: block; opacity: 1; transform: translateY(0); }
-        #mobileControls { display: none; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem; }
-        #mobileControls .day-selector { display: flex; justify-content: space-between; align-items: center; }
-        #mobileControls button { padding: 8px 12px; font-size: 14px; width: auto; flex-grow: 1; }
-        #mobileControls #prevDay, #mobileControls #nextDay { flex-grow: 0; width: 50px; }
-        #currentDayDisplay { color: var(--primary-accent-color); font-size: 1.2em; font-weight: 700; text-align: center; flex-grow: 2; }
-        #courseData { margin-top: 1rem; }
-        .course-grid { display: grid; grid-template-columns: 129px repeat(7, 1fr); gap: 4px; min-width: 900px; box-sizing: border-box; font-size: 0.85em; }
-        .grid-cell { padding: 8px; border-radius: 6px; background-color: var(--surface-color); display: flex; align-items: center; justify-content: center; text-align: center; min-height: 60px; transition: all 0.3s ease-in-out; overflow: hidden; text-overflow: ellipsis; }
-        .grid-header, .grid-time-header { color: var(--secondary-accent-color); font-weight: 500; background-color: var(--bg-color); position: sticky; top: 0; z-index: 2; }
-        .grid-time-header { left: 0; z-index: 3; }
-        .grid-slot-time { color: var(--text-muted-color); font-weight: 500; background-color: var(--bg-color); position: sticky; left: 0; z-index: 1; }
-        .grid-course a { color: var(--text-color); text-decoration: none; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
-        .grid-course.has-course { cursor: pointer; }
-        .grid-course.has-course:hover { transform: scale(1.05); background-color: var(--primary-accent-color); box-shadow: var(--hover-glow); z-index: 10; }
-        .grid-course.has-course:hover a { color: var(--bg-color); font-weight: 500; }
-        .grid-course.empty { background-color: transparent; border: 1px dashed var(--border-color); }
-        #courseTableTitle { grid-column: 1 / -1; text-align: center; font-size: 1.2em; letter-spacing: 1px; color: var(--text-color); padding-bottom: 1rem; background-color: var(--surface-color); border-radius: 6px; }
-        .row-expandable { cursor: pointer; position: relative; }
-        .row-expandable::after { content: '+'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 1.5em; color: var(--text-muted-color); transition: transform 0.3s ease; }
-        .row-expandable.expanded::after { content: '−'; }
-        .is-collapsed-merged { grid-column: 1 / -1 !important; height: 25px !important; min-height: 25px !important; border: 1px solid var(--border-color) !important; }
-        .cell-hidden-by-collapse { display: none !important; }
-        .grid-slot-time .content-collapsed { display: none; }
-        .grid-slot-time .content-normal { display: block; }
-        .grid-slot-time.is-collapsed-merged .content-normal { display: none; }
-        .grid-slot-time.is-collapsed-merged .content-collapsed { display: inline; }
+
+        /* Light Theme */
+        [data-theme="light"] {
+            --bg-color: #ffffff;
+            --surface-color: #f5f5f5;
+            --primary-accent-color: #385682;
+            --secondary-accent-color: #4a5d96;
+            --text-color: #000000;
+            --text-muted-color: #666666;
+            --border-color: #e0e0e0;
+            --hover-glow: 0 0 20px rgba(74, 111, 165, 0.3);
+            --error-bg: rgba(220, 53, 69, 0.1);
+            --error-text: #dc3545;
+            --success-bg: rgba(40, 167, 69, 0.1);
+            --success-text: #28a745;
+            --dot-color: rgba(74, 111, 165, 0.15);
+            --icon-filter: brightness(0) invert(0);
+        }
+
+        /* Background with dots pattern */
+        body {
+            font-family: 'Noto Sans TC', Arial, sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle, var(--dot-color) 1px, transparent 1px);
+            background-size: 10px 10px;
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+            overflow-x: hidden;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: var(--surface-color);
+            border-radius: 50px;
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-color);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            user-select: none;
+        }
+
+        .theme-toggle:hover {
+            box-shadow: var(--hover-glow);
+            transform: translateY(-2px);
+        }
+
+        .theme-icon {
+            width: 20px;
+            height: 20px;
+            transition: transform 0.3s ease;
+        }
+
+        .content-wrapper {
+            width: 100%;
+            max-width: 1200px;
+            margin: 60px 0 20px 0;
+            padding: 2.5rem;
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            transition: all 0.5s ease-out;
+            box-sizing: border-box;
+        }
+
+        h2, h3 {
+            color: var(--secondary-accent-color);
+            text-align: center;
+            margin: 0 0 2rem 0;
+            font-weight: 500;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 400;
+            color: var(--text-muted-color);
+        }
+
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 12px 15px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-sizing: border-box;
+            color: var(--text-color);
+            font-size: 16px;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary-accent-color);
+            box-shadow: 0 0 8px rgba(107, 147, 214, 0.3);
+        }
+
+        button, .styled-button {
+            background-color: var(--primary-accent-color);
+            color: var(--bg-color);
+            padding: 12px 25px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            width: 100%;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        button:hover, .styled-button:hover {
+            background-color: var(--secondary-accent-color);
+            transform: translateY(-2px);
+            box-shadow: var(--hover-glow);
+        }
+
+        button:disabled, .styled-button.disabled {
+            background-color: var(--text-muted-color);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .message {
+            margin-top: 1.5rem;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .success {
+            background-color: var(--success-bg);
+            color: var(--success-text);
+        }
+
+        .error {
+            background-color: var(--error-bg);
+            color: var(--error-text);
+        }
+
+        .loading {
+            color: var(--text-muted-color);
+        }
+
+        #courseContent {
+            display: none;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+
+        #courseContent.visible {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #mobileControls {
+            display: none;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        #mobileControls .day-selector {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #mobileControls button {
+            padding: 8px 12px;
+            font-size: 14px;
+            width: auto;
+            flex-grow: 1;
+        }
+
+        #mobileControls #prevDay, #mobileControls #nextDay {
+            flex-grow: 0;
+            width: 50px;
+        }
+
+        #currentDayDisplay {
+            color: var(--primary-accent-color);
+            font-size: 1.2em;
+            font-weight: 700;
+            text-align: center;
+            flex-grow: 2;
+        }
+
+        #courseData {
+            margin-top: 1rem;
+        }
+
+        .course-grid {
+            display: grid;
+            grid-template-columns: 129px repeat(7, 1fr);
+            gap: 4px;
+            min-width: 900px;
+            box-sizing: border-box;
+            font-size: 0.85em;
+        }
+
+        .grid-cell {
+            padding: 8px;
+            border-radius: 6px;
+            background-color: var(--surface-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            min-height: 60px;
+            transition: all 0.3s ease-in-out;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .grid-header, .grid-time-header {
+            color: var(--secondary-accent-color);
+            font-weight: 500;
+            background-color: var(--bg-color);
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+
+        .grid-time-header {
+            left: 0;
+            z-index: 3;
+        }
+
+        .grid-slot-time {
+            color: var(--text-muted-color);
+            font-weight: 500;
+            background-color: var(--bg-color);
+            position: sticky;
+            left: 0;
+            z-index: 1;
+        }
+
+        .grid-course a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .grid-course.has-course {
+            cursor: pointer;
+        }
+
+        .grid-course.has-course:hover {
+            transform: scale(1.05);
+            background-color: var(--primary-accent-color);
+            box-shadow: var(--hover-glow);
+            z-index: 10;
+        }
+
+        .grid-course.has-course:hover a {
+            color: var(--bg-color);
+            font-weight: 500;
+        }
+
+        .grid-course.empty {
+            background-color: transparent;
+            border: 1px dashed var(--border-color);
+        }
+
+        #courseTableTitle {
+            grid-column: 1 / -1;
+            text-align: center;
+            font-size: 1.2em;
+            letter-spacing: 1px;
+            color: var(--text-color);
+            padding-bottom: 1rem;
+            background-color: var(--surface-color);
+            border-radius: 6px;
+        }
+
+        .row-expandable {
+            cursor: pointer;
+            position: relative;
+        }
+
+        .row-expandable::after {
+            content: '+';
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.5em;
+            color: var(--text-muted-color);
+            transition: transform 0.3s ease;
+        }
+
+        .row-expandable.expanded::after {
+            content: '−';
+        }
+
+        .is-collapsed-merged {
+            grid-column: 1 / -1 !important;
+            height: 25px !important;
+            min-height: 25px !important;
+            border: 1px solid var(--border-color) !important;
+        }
+
+        .cell-hidden-by-collapse {
+            display: none !important;
+        }
+
+        .grid-slot-time .content-collapsed {
+            display: none;
+        }
+
+        .grid-slot-time .content-normal {
+            display: block;
+        }
+
+        .grid-slot-time.is-collapsed-merged .content-normal {
+            display: none;
+        }
+
+        .grid-slot-time.is-collapsed-merged .content-collapsed {
+            display: inline;
+        }
+
+        /* Export buttons with icons */
+        .export-buttons {
+            display: none;
+            flex-direction: column;
+            gap: 1rem;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .export-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 20px;
+
+            background: #00000000; /* 半透明背景 */
+            backdrop-filter: blur(10px) saturate(180%);
+            -webkit-backdrop-filter: blur(10px) saturate(180%);
+            border: 1px solid var(--border-color); /* 邊框增加玻璃邊界感 */
+
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            text-decoration: none;
+
+            color: var(--text-color); /* 文字白色 */
+            mix-blend-mode: difference; /* 讓文字與背景反差 */
+
+            transition: all 0.3s ease;
+        }
+
+        .export-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            background: #00000010;
+
+        }
+
+        .export-button:disabled {
+            background: #00000010;
+            border: 1px solid var(--border-color);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+            opacity: 0.5;
+        }
+
+
+        .export-icon {
+            width: 20px;
+            height: 20px;
+            filter: var(--icon-filter);
+        }
+
+        /* Mobile specific styles */
         @media (max-width: 768px) {
-            body { padding: 0; }
-            .content-wrapper { max-width: 100%; border-radius: 0; padding: 1.5rem 1rem; border: none; box-shadow: none; }
-            #mobileControls { display: flex; }
-            .course-grid { min-width: unset; }
-            .day-hidden { display: none !important; }
-            .course-grid.mobile-full-view { grid-template-columns: 35px repeat(7, 1fr); gap: 2px; font-size: 0.6em; }
-            .mobile-full-view .grid-cell { padding: 3px 2px; min-height: unset; overflow: visible; text-overflow: clip; word-break: break-all; line-height: 1.2; }
-            .mobile-full-view .grid-course.has-course:hover { transform: none; }
-            .row-expandable::after { right: 5px; }
+            body {
+                padding: 0 10px;
+                background-size: 15px 15px;
+            }
+
+            .theme-toggle {
+                top: 15px;
+                right: 15px;
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+
+            .theme-icon {
+                width: 16px;
+                height: 16px;
+            }
+
+            .content-wrapper {
+                max-width: 100%;
+                margin: 50px 0 15px 0;
+                padding: 1.5rem 1rem;
+                border-radius: 8px;
+                border: none;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+
+            #mobileControls {
+                display: flex;
+            }
+
+            .course-grid {
+                min-width: unset;
+            }
+
+            .day-hidden {
+                display: none !important;
+            }
+
+            .course-grid.mobile-full-view {
+                grid-template-columns: 35px repeat(7, 1fr);
+                gap: 2px;
+                font-size: 0.6em;
+            }
+
+            .mobile-full-view .grid-cell {
+                padding: 3px 2px;
+                min-height: unset;
+                overflow: visible;
+                text-overflow: clip;
+                word-break: break-all;
+                line-height: 1.2;
+            }
+
+            .mobile-full-view .grid-course.has-course:hover {
+                transform: none;
+            }
+
+            .row-expandable::after {
+                right: 5px;
+            }
+
+            .export-buttons {
+                flex-direction: column;
+            }
+
+            .export-button {
+                font-size: 14px;
+                padding: 10px 16px;
+            }
+
+            .export-icon {
+                width: 18px;
+                height: 18px;
+            }
         }
-        .export-buttons { display: none; flex-direction: column; gap: 1rem; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--border-color); }
-        @media (min-width: 768px) { .export-buttons { flex-direction: row; } .export-buttons > * { flex: 1; } }
-        .is-printing { background-color: #ffffff !important; min-width: 1200px !important; }
-        .is-printing .grid-cell { background-color: #ffffff !important; color: #000000 !important; border: 1px solid #ddd !important; }
-        .is-printing .grid-slot-time, .is-printing .grid-header, .is-printing .grid-time-header { background-color: #f2f2f2 !important; color: #000000 !important; }
-        .is-printing .grid-course a { color: #000000 !important; }
-        .is-printing .row-expandable::after { display: none !important; }
-        .is-printing .grid-header, .is-printing .grid-time-header, .is-printing .grid-slot-time { position: static !important; }
+
+        @media (min-width: 768px) {
+            .export-buttons {
+                flex-direction: row;
+            }
+            .export-buttons > * {
+                flex: 1;
+            }
+        }
+
+        .is-printing {
+            background-color: #ffffff !important;
+            min-width: 1200px !important;
+        }
+
+        .is-printing .grid-cell {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            border: 1px solid #ddd !important;
+        }
+
+        .is-printing .grid-slot-time, .is-printing .grid-header, .is-printing .grid-time-header {
+            background-color: #f2f2f2 !important;
+            color: #000000 !important;
+        }
+
+        .is-printing .grid-course a {
+            color: #000000 !important;
+        }
+
+        .is-printing .row-expandable::after {
+            display: none !important;
+        }
+
+        .is-printing .grid-header, .is-printing .grid-time-header, .is-printing .grid-slot-time {
+            position: static !important;
+        }
     </style>
 </head>
 <body>
+    <!-- Theme Toggle Button -->
+    <div class="theme-toggle" onclick="toggleTheme()">
+        <span id="theme-text">dark</span>
+    </div>
+
     <div class="content-wrapper">
-        <h2 id="mainTitle">登入東吳大學系統</h2>
+        <h2 id="mainTitle">東吳大學課表工具</h2>
         <form id="loginForm">
-            <div class="form-group"> <label for="userid">學號:</label> <input type="text" id="userid" name="userid" required autocomplete="username"> </div>
-            <div class="form-group"> <label for="password">密碼:</label> <input type="password" id="password" name="password" required autocomplete="current-password"> </div>
+            <div class="form-group">
+                <label for="userid">學號:</label>
+                <input type="text" id="userid" name="userid" required autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label for="password">密碼:（同校務行政系統）</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+            </div>
             <button type="submit" id="loginBtn">登入並查詢課表</button>
         </form>
         <div id="message"></div>
         <div id="courseContent">
             <div id="mobileControls">
-                <div class="day-selector"> <button id="prevDay"><</button> <span id="currentDayDisplay"></span> <button id="nextDay">></button> </div>
+                <div class="day-selector">
+                    <button id="prevDay"><</button>
+                    <span id="currentDayDisplay"></span>
+                    <button id="nextDay">></button>
+                </div>
                 <button id="toggleViewBtn">顯示整週</button>
             </div>
             <div id="courseData"></div>
             <div class="export-buttons" id="exportContainer">
-                <button id="exportPngBtn">導出為 PNG</button>
-                <button id="exportPdfBtn">導出為 PDF</button>
-                <button class="styled-button" id="exportIcsBtn">添加到日曆 (.ics)</button>
+                <button class="export-button" id="exportPngBtn">
+                    <svg class="export-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21,15 16,10 5,21"/>
+                    </svg>
+                    導出為 PNG
+                </button>
+                <button class="export-button" id="exportPdfBtn">
+                    <svg class="export-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14,2 L20,8 L20,22 L4,22 L4,2 L14,2 Z"/>
+                        <polyline points="14,2 14,8 20,8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10,9 9,9 8,9"/>
+                    </svg>
+                    導出為 PDF
+                </button>
+                <button class="export-button" id="exportIcsBtn">
+                    <svg class="export-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                        <line x1="16" y1="2" x2="16" y2="6"/>
+                        <line x1="8" y1="2" x2="8" y2="6"/>
+                        <line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                    添加到日曆 (.ics)
+                </button>
             </div>
         </div>
     </div>
-<!-- 您只需要替換掉您 HTML 檔案中 <script> 到 </script> 的部分 -->
-<script>
-    let currentDayIndex = 0;
-    let currentViewMode = "today";
-    const dayNames = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"];
 
-    function setupMobileView() {
-        const isMobile = window.innerWidth <= 768;
-        const mobileControls = document.getElementById("mobileControls");
-        if (!document.querySelector(".course-grid")) return;
+    <script>
+        let currentDayIndex = 0;
+        let currentViewMode = "today";
+        const dayNames = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"];
 
-        mobileControls.style.display = isMobile ? "flex" : "none";
-
-        if (isMobile) {
-            if (currentViewMode !== "full-mobile") {
-                let today = new Date().getDay();
-                currentDayIndex = (today === 0) ? 6 : today - 1;
-                currentViewMode = "today";
-            }
-        } else {
-            currentViewMode = "full-desktop";
-        }
-        updateTableView();
-    }
-
-    function updateTableView() {
-        const isMobile = window.innerWidth <= 768;
-        const grid = document.querySelector(".course-grid");
-        if (!grid) return;
-
-        const timeSlots = grid.querySelectorAll(".grid-slot-time");
-        const allCells = grid.querySelectorAll("[data-day-index]");
-
-        // Reset all view-specific classes and styles
-        grid.classList.remove("mobile-full-view");
-        grid.style.gridTemplateColumns = "";
-        timeSlots.forEach(slot => {
-            slot.classList.remove("is-collapsed-merged", "row-expandable", "expanded");
-        });
-        grid.querySelectorAll(".grid-course").forEach(cell => {
-            cell.classList.remove("cell-hidden-by-collapse");
-        });
-        allCells.forEach(cell => cell.classList.remove("day-hidden"));
-
-        // Apply view-specific logic
-        if (isMobile && currentViewMode === "today") {
-            document.getElementById("toggleViewBtn").textContent = "顯示整週";
-            grid.style.gridTemplateColumns = "35px 1fr";
-            allCells.forEach(cell => {
-                cell.classList.toggle("day-hidden", cell.dataset.dayIndex != currentDayIndex);
-            });
-        } else if (isMobile && currentViewMode === "full-mobile") {
-            document.getElementById("toggleViewBtn").textContent = "僅顯示今日";
-            grid.classList.add("mobile-full-view");
-        } else { // Desktop view
-             document.getElementById("toggleViewBtn").textContent = "僅顯示今日";
-        }
-        
-        // Collapse empty rows
-        timeSlots.forEach(slot => {
-            const slotIndex = slot.dataset.slotIndex;
-            let shouldCollapse = false;
-            if (isMobile && currentViewMode === "today") {
-                // In mobile today view, collapse if THIS day is empty
-                const dayCell = grid.querySelector(`.grid-course[data-slot-index="${slotIndex}"][data-day-index="${currentDayIndex}"]`);
-                if (dayCell?.dataset.isEmpty === 'true') {
-                    shouldCollapse = true;
-                }
-            } else {
-                // In desktop or mobile full week view, collapse if the WHOLE week is empty
-                if (slot.dataset.isWeekEmpty === 'true') {
-                    shouldCollapse = true;
-                }
-            }
-
-            if (shouldCollapse) {
-                slot.classList.add("row-expandable", "is-collapsed-merged");
-                grid.querySelectorAll(`.grid-course[data-slot-index="${slotIndex}"]`).forEach(cell => {
-                    cell.classList.add("cell-hidden-by-collapse");
-                });
-            }
-        });
-
-        const currentDayDisplay = document.getElementById("currentDayDisplay");
-        currentDayDisplay.textContent = dayNames[currentDayIndex];
-        document.getElementById("prevDay").disabled = (currentDayIndex === 0 && currentViewMode === "today");
-        document.getElementById("nextDay").disabled = (currentDayIndex === 6 && currentViewMode === "today");
-    }
-
-    async function performExport(type) {
-        const grid = document.querySelector('.course-grid');
-        const btnId = `export${type}Btn`;
-        const button = document.getElementById(btnId);
-        const originalText = button.textContent;
-        button.textContent = "生成中...";
-        button.disabled = true;
-
-        // Prepare grid for printing
-        grid.classList.add('is-printing');
-        grid.classList.remove('mobile-full-view');
-        grid.style.gridTemplateColumns = '';
-        grid.querySelectorAll('.is-collapsed-merged').forEach(slot => {
-            slot.classList.remove('is-collapsed-merged', 'expanded');
-            const slotIndex = slot.dataset.slotIndex;
-            grid.querySelectorAll(`.grid-course[data-slot-index="${slotIndex}"]`).forEach(cell => {
-                cell.classList.remove('cell-hidden-by-collapse');
-            });
-        });
-        grid.querySelectorAll('.day-hidden').forEach(cell => cell.classList.remove('day-hidden'));
-
-        try {
-            await new Promise(resolve => setTimeout(resolve, 100)); // Allow DOM to update
-            const canvas = await html2canvas(grid, {
-                scale: 2,
-                useCORS: true,
-                backgroundColor: '#ffffff'
-            });
-
-            if (type === 'Png') {
-                const link = document.createElement('a');
-                link.download = 'course_schedule.png';
-                link.href = canvas.toDataURL('image/png');
-                link.click();
-            } else if (type === 'Pdf') {
-                const { jsPDF } = window.jspdf;
-                const imgData = canvas.toDataURL('image/png');
-                const pdf = new jsPDF({
-                    orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
-                    unit: 'px',
-                    format: [canvas.width, canvas.height]
-                });
-                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-                pdf.save('course_schedule.pdf');
-            }
-        } catch (error) {
-            console.error('Export failed:', error);
-            alert('導出失敗，請查看控制台日誌。');
-        } finally {
-            // Revert grid to original state
-            grid.classList.remove('is-printing');
-            updateTableView(); // Re-apply current view settings
-            button.textContent = originalText;
-            button.disabled = false;
-        }
-    }
-
-    document.addEventListener("DOMContentLoaded", () => {
-        document.getElementById("courseData").addEventListener("click", event => {
-            const expandableRow = event.target.closest(".row-expandable");
-            if (!expandableRow) return;
-
-            const slotIndex = expandableRow.dataset.slotIndex;
-            const cellsToToggle = document.getElementById("courseData").querySelectorAll(`.grid-course[data-slot-index="${slotIndex}"]`);
+        // Theme toggle functionality
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
             
-            expandableRow.classList.toggle("expanded");
-            expandableRow.classList.toggle("is-collapsed-merged");
-            cellsToToggle.forEach(cell => cell.classList.toggle("cell-hidden-by-collapse"));
-        });
-
-        document.getElementById("exportPngBtn").addEventListener("click", () => performExport("Png"));
-        document.getElementById("exportPdfBtn").addEventListener("click", () => performExport("Pdf"));
-        
-        // --- ▼▼▼ 這就是修改後的核心部分 ▼▼▼ ---
-        document.getElementById("exportIcsBtn").addEventListener("click", function() {
-            // 使用 window.location.href 來觸發下載
-            // 這會讓瀏覽器在當前的 context 中發起請求，從而帶上 session cookie
-            window.location.href = '/api/export/ics';
-        });
-        // --- ▲▲▲ 修改結束 ▲▲▲ ---
-
-        document.getElementById("prevDay").addEventListener("click", () => {
-            if (currentDayIndex > 0) {
-                currentDayIndex--;
-                updateTableView();
-            }
-        });
-        document.getElementById("nextDay").addEventListener("click", () => {
-            if (currentDayIndex < 6) {
-                currentDayIndex++;
-                updateTableView();
-            }
-        });
-        document.getElementById("toggleViewBtn").addEventListener("click", () => {
-            if (window.innerWidth <= 768) {
-                currentViewMode = (currentViewMode === "today") ? "full-mobile" : "today";
-                updateTableView();
-            }
-        });
-        window.addEventListener("resize", setupMobileView);
-    });
-
-    document.getElementById("loginForm").addEventListener("submit", async function(event) {
-        event.preventDefault();
-        const userid = document.getElementById("userid").value;
-        const password = document.getElementById("password").value;
-        const loginBtn = document.getElementById("loginBtn");
-        const messageDiv = document.getElementById("message");
-
-        loginBtn.disabled = true;
-        loginBtn.textContent = "登入中...";
-        messageDiv.innerHTML = '<div class="loading">正在登入...</div>';
-        document.getElementById("courseContent").classList.remove("visible");
-
-        try {
-            const response = await fetch("/api/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userid: userid, password: password }),
-            });
-            const result = await response.json();
-
-            if (result.status === "success") {
-                messageDiv.innerHTML = '<div class="success">登入成功！正在獲取課表...</div>';
-                await getCourseTable(result.data);
+            document.documentElement.setAttribute('data-theme', newTheme);
+            
+            const themeIcon = document.querySelector('.theme-icon');
+            const themeText = document.getElementById('theme-text');
+            
+            if (newTheme === 'light') {
+                themeText.textContent = 'light';
             } else {
-                messageDiv.innerHTML = `<div class="error">登入失敗: ${result.message}</div>`;
+                themeText.textContent = 'dark';
+            }
+            
+            // Save theme preference
+            localStorage.setItem('theme', newTheme);
+        }
+
+        // Load saved theme
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            
+            const themeIcon = document.querySelector('.theme-icon');
+            const themeText = document.getElementById('theme-text');
+            
+            if (savedTheme === 'light') {
+                themeText.textContent = 'light';
+            } else {
+                themeText.textContent = 'dark';
+            }
+        }
+
+        function setupMobileView() {
+            const isMobile = window.innerWidth <= 768;
+            const mobileControls = document.getElementById("mobileControls");
+            if (!document.querySelector(".course-grid")) return;
+
+            mobileControls.style.display = isMobile ? "flex" : "none";
+
+            if (isMobile) {
+                if (currentViewMode !== "full-mobile") {
+                    let today = new Date().getDay();
+                    currentDayIndex = (today === 0) ? 6 : today - 1;
+                    currentViewMode = "today";
+                }
+            } else {
+                currentViewMode = "full-desktop";
+            }
+            updateTableView();
+        }
+
+        function updateTableView() {
+            const isMobile = window.innerWidth <= 768;
+            const grid = document.querySelector(".course-grid");
+            if (!grid) return;
+
+            const timeSlots = grid.querySelectorAll(".grid-slot-time");
+            const allCells = grid.querySelectorAll("[data-day-index]");
+
+            // Reset all view-specific classes and styles
+            grid.classList.remove("mobile-full-view");
+            grid.style.gridTemplateColumns = "";
+            timeSlots.forEach(slot => {
+                slot.classList.remove("is-collapsed-merged", "row-expandable", "expanded");
+            });
+            grid.querySelectorAll(".grid-course").forEach(cell => {
+                cell.classList.remove("cell-hidden-by-collapse");
+            });
+            allCells.forEach(cell => cell.classList.remove("day-hidden"));
+
+            // Apply view-specific logic
+            if (isMobile && currentViewMode === "today") {
+                document.getElementById("toggleViewBtn").textContent = "顯示整週";
+                grid.style.gridTemplateColumns = "35px 1fr";
+                allCells.forEach(cell => {
+                    cell.classList.toggle("day-hidden", cell.dataset.dayIndex != currentDayIndex);
+                });
+            } else if (isMobile && currentViewMode === "full-mobile") {
+                document.getElementById("toggleViewBtn").textContent = "僅顯示今日";
+                grid.classList.add("mobile-full-view");
+            } else { // Desktop view
+                document.getElementById("toggleViewBtn").textContent = "僅顯示今日";
+            }
+            
+            // Collapse empty rows
+            timeSlots.forEach(slot => {
+                const slotIndex = slot.dataset.slotIndex;
+                let shouldCollapse = false;
+                if (isMobile && currentViewMode === "today") {
+                    // In mobile today view, collapse if THIS day is empty
+                    const dayCell = grid.querySelector(`.grid-course[data-slot-index="${slotIndex}"][data-day-index="${currentDayIndex}"]`);
+                    if (dayCell?.dataset.isEmpty === 'true') {
+                        shouldCollapse = true;
+                    }
+                } else {
+                    // In desktop or mobile full week view, collapse if the WHOLE week is empty
+                    if (slot.dataset.isWeekEmpty === 'true') {
+                        shouldCollapse = true;
+                    }
+                }
+
+                if (shouldCollapse) {
+                    slot.classList.add("row-expandable", "is-collapsed-merged");
+                    grid.querySelectorAll(`.grid-course[data-slot-index="${slotIndex}"]`).forEach(cell => {
+                        cell.classList.add("cell-hidden-by-collapse");
+                    });
+                }
+            });
+
+            const currentDayDisplay = document.getElementById("currentDayDisplay");
+            currentDayDisplay.textContent = dayNames[currentDayIndex];
+            document.getElementById("prevDay").disabled = (currentDayIndex === 0 && currentViewMode === "today");
+            document.getElementById("nextDay").disabled = (currentDayIndex === 6 && currentViewMode === "today");
+        }
+
+        async function performExport(type) {
+            const grid = document.querySelector('.course-grid');
+            const btnId = `export${type}Btn`;
+            const button = document.getElementById(btnId);
+            const originalText = button.innerHTML;
+            button.innerHTML = `<svg class="export-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>生成中...`;
+            button.disabled = true;
+
+            // Prepare grid for printing
+            grid.classList.add('is-printing');
+            grid.classList.remove('mobile-full-view');
+            grid.style.gridTemplateColumns = '';
+            grid.querySelectorAll('.is-collapsed-merged').forEach(slot => {
+                slot.classList.remove('is-collapsed-merged', 'expanded');
+                const slotIndex = slot.dataset.slotIndex;
+                grid.querySelectorAll(`.grid-course[data-slot-index="${slotIndex}"]`).forEach(cell => {
+                    cell.classList.remove('cell-hidden-by-collapse');
+                });
+            });
+            grid.querySelectorAll('.day-hidden').forEach(cell => cell.classList.remove('day-hidden'));
+
+            try {
+                await new Promise(resolve => setTimeout(resolve, 100)); // Allow DOM to update
+                const canvas = await html2canvas(grid, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff'
+                });
+
+                if (type === 'Png') {
+                    const link = document.createElement('a');
+                    link.download = 'course_schedule.png';
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                } else if (type === 'Pdf') {
+                    const { jsPDF } = window.jspdf;
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF({
+                        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+                        unit: 'px',
+                        format: [canvas.width, canvas.height]
+                    });
+                    pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+                    pdf.save('course_schedule.pdf');
+                }
+            } catch (error) {
+                console.error('Export failed:', error);
+                alert('導出失敗，請查看控制台日誌。');
+            } finally {
+                // Revert grid to original state
+                grid.classList.remove('is-printing');
+                updateTableView(); // Re-apply current view settings
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        // Cache for course data
+        let courseDataCache = null;
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // Load theme on page load
+            loadTheme();
+
+            document.getElementById("courseData").addEventListener("click", event => {
+                const expandableRow = event.target.closest(".row-expandable");
+                if (!expandableRow) return;
+
+                const slotIndex = expandableRow.dataset.slotIndex;
+                const cellsToToggle = document.getElementById("courseData").querySelectorAll(`.grid-course[data-slot-index="${slotIndex}"]`);
+                
+                expandableRow.classList.toggle("expanded");
+                expandableRow.classList.toggle("is-collapsed-merged");
+                cellsToToggle.forEach(cell => cell.classList.toggle("cell-hidden-by-collapse"));
+            });
+
+            document.getElementById("exportPngBtn").addEventListener("click", () => performExport("Png"));
+            document.getElementById("exportPdfBtn").addEventListener("click", () => performExport("Pdf"));
+            
+            document.getElementById("exportIcsBtn").addEventListener("click", function() {
+                window.location.href = '/api/export/ics';
+            });
+
+            document.getElementById("prevDay").addEventListener("click", () => {
+                if (currentDayIndex > 0) {
+                    currentDayIndex--;
+                    updateTableView();
+                }
+            });
+            document.getElementById("nextDay").addEventListener("click", () => {
+                if (currentDayIndex < 6) {
+                    currentDayIndex++;
+                    updateTableView();
+                }
+            });
+            document.getElementById("toggleViewBtn").addEventListener("click", () => {
+                if (window.innerWidth <= 768) {
+                    currentViewMode = (currentViewMode === "today") ? "full-mobile" : "today";
+                    updateTableView();
+                }
+            });
+            window.addEventListener("resize", setupMobileView);
+        });
+
+        document.getElementById("loginForm").addEventListener("submit", async function(event) {
+            event.preventDefault();
+            const userid = document.getElementById("userid").value;
+            const password = document.getElementById("password").value;
+            const loginBtn = document.getElementById("loginBtn");
+            const messageDiv = document.getElementById("message");
+
+            loginBtn.disabled = true;
+            loginBtn.textContent = "登入中...";
+            messageDiv.innerHTML = '<div class="loading">正在登入...</div>';
+            document.getElementById("courseContent").classList.remove("visible");
+
+            try {
+                const response = await fetch("/api/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ userid: userid, password: password }),
+                });
+                const result = await response.json();
+
+                if (result.status === "success") {
+                    messageDiv.innerHTML = '<div class="success">登入成功！正在獲取課表...</div>';
+                    await getCourseTable(result.data);
+                } else {
+                    messageDiv.innerHTML = `<div class="error">登入失敗: ${result.message}</div>`;
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = "登入並查詢課表";
+                }
+            } catch (error) {
+                messageDiv.innerHTML = `<div class="error">發生錯誤: ${error.message}</div>`;
                 loginBtn.disabled = false;
                 loginBtn.textContent = "登入並查詢課表";
             }
-        } catch (error) {
-            messageDiv.innerHTML = `<div class="error">發生錯誤: ${error.message}</div>`;
-            loginBtn.disabled = false;
-            loginBtn.textContent = "登入並查詢課表";
-        }
-    });
-
- // 前端 JavaScript 修改
-let courseDataCache = null; // 添加全局變量來緩存課表數據
-
-// 修改 getCourseTable 函數，緩存課表數據
-async function getCourseTable(loginData) {
-    const messageDiv = document.getElementById("message");
-    try {
-        const response = await fetch("/api/course", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(loginData),
         });
-        const result = await response.json();
-        if (result.status === "success") {
-            // 緩存課表數據
-            courseDataCache = result.courseData; // 需要後端返回原始數據
-            
-            document.getElementById("loginForm").style.display = "none";
-            document.getElementById("mainTitle").textContent = "您的課表";
-            messageDiv.innerHTML = '<div class="success">課表獲取成功！</div>';
-            const courseContent = document.getElementById("courseContent");
 
-            document.getElementById("courseData").innerHTML = result.content;
-            courseContent.classList.add("visible");
-            document.getElementById("exportContainer").style.display = "flex";
-            setupMobileView();
-        } else {
-            messageDiv.innerHTML = `<div class="error">課表獲取失敗: ${result.message}</div>`;
+        async function getCourseTable(loginData) {
+            const messageDiv = document.getElementById("message");
+            try {
+                const response = await fetch("/api/course", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(loginData),
+                });
+                const result = await response.json();
+                if (result.status === "success") {
+                    // 緩存課表數據
+                    courseDataCache = result.courseData; // 需要後端返回原始數據
+                    
+                    document.getElementById("loginForm").style.display = "none";
+                    document.getElementById("mainTitle").textContent = "您的課表";
+                    messageDiv.innerHTML = '<div class="success">課表獲取成功！</div>';
+                    const courseContent = document.getElementById("courseContent");
+
+                    document.getElementById("courseData").innerHTML = result.content;
+                    courseContent.classList.add("visible");
+                    document.getElementById("exportContainer").style.display = "flex";
+                    setupMobileView();
+                } else {
+                    messageDiv.innerHTML = `<div class="error">課表獲取失敗: ${result.message}</div>`;
+                }
+            } catch (error) {
+                messageDiv.innerHTML = `<div class="error">課表獲取錯誤: ${error.message}</div>`;
+            } finally {
+                const loginBtn = document.getElementById("loginBtn");
+                loginBtn.disabled = false;
+                loginBtn.textContent = "重新查詢";
+            }
         }
-    } catch (error) {
-        messageDiv.innerHTML = `<div class="error">課表獲取錯誤: ${error.message}</div>`;
-    } finally {
-        const loginBtn = document.getElementById("loginBtn");
-        loginBtn.disabled = false;
-        loginBtn.textContent = "重新查詢";
-    }
-}
 
 </script>
 </body>
